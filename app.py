@@ -75,6 +75,9 @@ def calc_rsi(close, n=14):
 
 df['rsi'] = calc_rsi(df['close'])
 
+# 填充所有NaN值，确保线条连续（用0填充开头，后续值用ffill）
+df = df.fillna(method='ffill').fillna(0)
+
 # 侧边栏
 with st.sidebar:
     st.selectbox("股票", [f"{s['ts_code']} {s['name']}" for s in DEMO_STOCKS], key="stock")
