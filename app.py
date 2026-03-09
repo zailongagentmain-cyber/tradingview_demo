@@ -1,5 +1,5 @@
 """
-TradingView Demo v2.2.1 - 策略系统集成版 (带演示数据)
+TradingView Demo v2.3.0 - 策略系统集成版 (完整编辑器)
 """
 import streamlit as st
 import pandas as pd
@@ -10,7 +10,7 @@ import os
 import sys
 import random
 
-VERSION = "v2.2.1"
+VERSION = "v2.3.0"
 
 st.set_page_config(page_title=f"TradingView {VERSION}", page_icon="📈")
 st.markdown(f"<div style='text-align:right;color:#888;font-size:12px'>📦 {VERSION}</div>", unsafe_allow_html=True)
@@ -25,7 +25,7 @@ def get_stocks(limit=200):
         df = pd.read_sql(f"SELECT ts_code, name FROM stocks LIMIT {limit}", conn)
         conn.close()
         return df
-    except Exception as e:
+    except:
         return None
 
 def get_klines(ts_code, limit=500):
@@ -34,11 +34,10 @@ def get_klines(ts_code, limit=500):
         df = pd.read_sql(f"SELECT trade_date, open, high, low, close, vol FROM daily_klines WHERE ts_code = '{ts_code}' ORDER BY trade_date ASC LIMIT {limit}", conn)
         conn.close()
         return df
-    except Exception as e:
+    except:
         return None
 
 def generate_demo_data(days=200):
-    """生成演示数据"""
     random.seed(42)
     data = []
     price = 12.0
@@ -53,6 +52,47 @@ def generate_demo_data(days=200):
         price = c
     return pd.DataFrame(data)
 
+# 初始化 session state
+if 'custom_indicator_code' not in st.session_state:
+    st.session_state.custom_indicator_code = '''# 自定义指标示例
+# df 包含: open, high, low, close, vol
+import pandas as pd
+
+def my_indicator(df, params):
+    """自定义指标 - 返回 Series 或 DataFrame"""
+    period = params.get('period', 10)
+    
+    # 示例: 自定义振荡器
+    ma = df['close'].rolling(period).mean()
+    osc = (df['close'] - ma) / ma * 100
+    
+    return pd.DataFrame({
+        'ma': ma,
+        'oscillator': osc
+    })
+'''
+
+if 'custom_strategy_code' not in st.session_state:
+    st.session_state.custom_strategy_code = '''# 自定义策略示例
+# df 包含: open, high, low, close, vol
+# 返回: 1=买入, -1=卖出, 0=持有
+import pandas as pd
+
+def my_strategy(df, params):
+    """自定义策略信号"""
+    short = params.get('short', 5)
+    long = params.get('long', 20)
+    
+    ma_short = df['close'].rolling(short).mean()
+    ma_long = df['close'].rolling(long).mean()
+    
+    signal = pd.Series(0, index=df.index)
+    signal[ma_short > ma_long] = 1   # 金叉买入
+    signal[ma_short < ma_long] = -1  # 死叉卖出
+    
+    return signal
+'''
+
 # 尝试获取数据
 stocks_df = get_stocks(200)
 DB_AVAILABLE = stocks_df is not None and not stocks_df.empty
@@ -64,7 +104,6 @@ with st.sidebar:
     if DB_AVAILABLE:
         stock_opts = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for _, s in stocks_df.iterrows()}
     else:
-        # 演示用股票列表
         stock_opts = {
             "000001.SZ - 平安银行": "000001.SZ",
             "600519.SH - 贵州茅台": "600519.SH",
@@ -75,8 +114,7 @@ with st.sidebar:
     
     sel = st.selectbox("股票", list(stock_opts.keys()), key="stock")
     ts_code = stock_opts.get(sel, "000001.SZ")
-    
-    st.caption(f"数据源: {'📡 真实数据库' if DB_AVAILABLE else '🎭 演示数据'}")
+    st.caption(f"数据源: {'📡 数据库' if DB_AVAILABLE else '🎭 演示数据'}")
     
     st.divider()
     
@@ -94,25 +132,54 @@ with st.sidebar:
     
     st.divider()
     
-    # 策略系统
+    # 🎯 策略系统
     st.subheader("🎯 策略系统")
-    strategy_name = st.selectbox("选择策略", ["无", "MA_CROSS", "RSI", "MACD", "DUAL_MA_RSI"], key="strategy_select")
     
-    if strategy_name == "MA_CROSS":
-        st.caption("参数设置")
-        fast_period = st.number_input("短期均线", value=5, min_value=1, key="ma_fast")
-        slow_period = st.number_input("长期均线", value=20, min_value=1, key="ma_slow")
-    elif strategy_name == "RSI":
-        st.caption("参数设置")
-        rsi_period = st.number_input("RSI周期", value=14, min_value=1, key="rsi_n")
-        oversold = st.slider("超卖阈值", 10, 40, 30, key="rsi_oversold")
-        overbought = st.slider("超买阈值", 60, 90, 70, key="rsi_overbought")
-    elif strategy_name == "MACD":
-        st.caption("参数设置")
-        macd_fast = st.number_input("MACD快线", value=12, min_value=1, key="macd_fast")
-        macd_slow = st.number_input("MACD慢线", value=26, min_value=1, key="macd_slow")
-        macd_signal = st.number_input("MACD信号线", value=9, min_value=1, key="macd_sig")
+    # 策略模式选择
+    mode = st.radio("模式", ["内置策略", "自定义策略"], horizontal=True)
     
+    if mode == "内置策略":
+        strategy_name = st.selectbox("选择策略", ["无", "MA_CROSS", "RSI", "MACD", "DUAL_MA_RSI"], key="strategy_select")
+        
+        if strategy_name == "MA_CROSS":
+            st.caption("参数设置")
+            fast_period = st.number_input("短期均线", value=5, min_value=1, key="ma_fast")
+            slow_period = st.number_input("长期均线", value=20, min_value=1, key="ma_slow")
+        elif strategy_name == "RSI":
+            st.caption("参数设置")
+            rsi_period = st.number_input("RSI周期", value=14, min_value=1, key="rsi_n")
+            oversold = st.slider("超卖阈值", 10, 40, 30, key="rsi_oversold")
+            overbought = st.slider("超买阈值", 60, 90, 70, key="rsi_overbought")
+        elif strategy_name == "MACD":
+            st.caption("参数设置")
+            macd_fast = st.number_input("MACD快线", value=12, min_value=1, key="macd_fast")
+            macd_slow = st.number_input("MACD慢线", value=26, min_value=1, key="macd_slow")
+            macd_signal = st.number_input("MACD信号线", value=9, min_value=1, key="macd_sig")
+    else:
+        strategy_name = "自定义"
+        # 自定义策略代码编辑器
+        st.caption("编写你的策略代码:")
+        custom_code = st.text_area("策略代码", value=st.session_state.custom_strategy_code, height=150, key="strategy_editor")
+        st.session_state.custom_strategy_code = custom_code
+        
+        # 策略参数
+        st.caption("策略参数")
+        custom_params = {}
+        custom_params['short'] = st.number_input("短期均线", value=5, min_value=1, key="custom_short")
+        custom_params['long'] = st.number_input("长期均线", value=20, min_value=1, key="custom_long")
+    
+    st.divider()
+    
+    # 📝 指标编辑器
+    with st.expander("📝 自定义指标", expanded=False):
+        st.caption("编写你的指标代码:")
+        custom_ind_code = st.text_area("指标代码", value=st.session_state.custom_indicator_code, height=150, key="indicator_editor")
+        st.session_state.custom_indicator_code = custom_ind_code
+        
+        if st.button("🎨 应用指标", key="apply_indicator"):
+            st.success("指标已应用 (预览)")
+    
+    # 运行回测
     run_backtest = st.button("🚀 运行回测", type="primary")
 
 # 获取数据
@@ -164,21 +231,35 @@ df['obv'] = (df['vol'] * ((df['close'] - df['close'].shift()) / df['close'].shif
 
 # 生成策略信号
 signals = pd.Series(0, index=df.index)
-if strategy_name == "MA_CROSS":
-    ma_fast = df['close'].rolling(fast_period).mean()
-    ma_slow = df['close'].rolling(slow_period).mean()
-    signals[ma_fast > ma_slow] = 1
-    signals[ma_fast < ma_slow] = -1
-elif strategy_name == "RSI":
-    signals[df['rsi'] < oversold] = 1
-    signals[df['rsi'] > overbought] = -1
-elif strategy_name == "MACD":
-    ema_fast = df['close'].ewm(span=macd_fast).mean()
-    ema_slow = df['close'].ewm(span=macd_slow).mean()
-    dif = ema_fast - ema_slow
-    dea = dif.ewm(span=macd_signal).mean()
-    signals[dif > dea] = 1
-    signals[dif < dea] = -1
+
+if mode == "内置策略":
+    if strategy_name == "MA_CROSS":
+        ma_fast = df['close'].rolling(fast_period).mean()
+        ma_slow = df['close'].rolling(slow_period).mean()
+        signals[ma_fast > ma_slow] = 1
+        signals[ma_fast < ma_slow] = -1
+    elif strategy_name == "RSI":
+        signals[df['rsi'] < oversold] = 1
+        signals[df['rsi'] > overbought] = -1
+    elif strategy_name == "MACD":
+        ema_fast = df['close'].ewm(span=macd_fast).mean()
+        ema_slow = df['close'].ewm(span=macd_slow).mean()
+        dif = ema_fast - ema_slow
+        dea = dif.ewm(span=macd_signal).mean()
+        signals[dif > dea] = 1
+        signals[dif < dea] = -1
+    elif strategy_name == "DUAL_MA_RSI":
+        ma5 = df['close'].rolling(5).mean()
+        ma20 = df['close'].rolling(20).mean()
+        signals[(ma5 > ma20) & (df['rsi'] < 40)] = 1
+        signals[(ma5 < ma20) | (df['rsi'] > 60)] = -1
+else:
+    # 自定义策略
+    try:
+        exec(custom_code, globals())
+        signals = my_strategy(df, custom_params)
+    except Exception as e:
+        st.error(f"策略代码错误: {e}")
 
 # 运行回测
 if run_backtest and strategy_name != "无":
