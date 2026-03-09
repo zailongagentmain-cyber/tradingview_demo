@@ -169,57 +169,57 @@ for ma_name, show in ma_opts.items():
     if show:
         if ma_name == 'BOLL':
             fig.add_trace(go.Scatter(x=df['date'], y=df['boll_upper'], name='BOLL上',
-                line=dict(connectgaps=True, color='rgba(255,255,255,0.2)', width=1), showlegend=False), row=1, col=1)
+                line=dict(color='rgba(255,255,255,0.2)', width=1), showlegend=False), row=1, col=1)
             fig.add_trace(go.Scatter(x=df['date'], y=df['boll_lower'], name='BOLL下',
-                line=dict(connectgaps=True, color='rgba(255,255,255,0.2)', width=1), fill='tonexty',
+                line=dict(color='rgba(255,255,255,0.2)', width=1), fill='tonexty',
                 fillcolor='rgba(255,255,255,0.05)', showlegend=False), row=1, col=1)
         else:
             fig.add_trace(go.Scatter(x=df['date'], y=df[ma_name.lower()], name=ma_name,
-                line=dict(connectgaps=True, color=ma_colors.get(ma_name, '#fff'), width=1.5)), row=1, col=1)
+                line=dict(color=ma_colors.get(ma_name, '#fff'), width=1.5)), row=1, col=1)
 
 # ====== 行2: 副图1 ======
 if ind1 != "无":
     if ind1 == "MACD":
         colors = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
         fig.add_trace(go.Bar(x=df['date'], y=df['macd_hist'], name='MACD', marker_color=colors, opacity=0.7), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', line=dict(connectgaps=True, color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_signal'], name='DEA', line=dict(connectgaps=True, color='#ff9800', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_signal'], name='DEA', line=dict(color='#ff9800', width=1.5)), row=2, col=1)
     elif ind1 == "KDJ":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', line=dict(connectgaps=True, color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', line=dict(connectgaps=True, color='#ff9800', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', line=dict(connectgaps=True, color='#e91e63', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', line=dict(color='#e91e63', width=1.5)), row=2, col=1)
     elif ind1 == "RSI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', line=dict(connectgaps=True, color='#9c27b0', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', line=dict(color='#9c27b0', width=1.5)), row=2, col=1)
     elif ind1 == "WR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', line=dict(connectgaps=True, color='#ff5722', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', line=dict(color='#ff5722', width=1.5)), row=2, col=1)
     elif ind1 == "CCI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', line=dict(connectgaps=True, color='#00bcd4', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
     elif ind1 == "ATR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', line=dict(connectgaps=True, color='#795548', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', line=dict(color='#795548', width=1.5)), row=2, col=1)
     elif ind1 == "OBV":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', line=dict(connectgaps=True, color='#00bcd4', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
 
 # ====== 行3: 副图2 ======
 if ind2 != "无":
     if ind2 == "MACD":
         colors = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
         fig.add_trace(go.Bar(x=df['date'], y=df['macd_hist'], name='MACD', marker_color=colors, opacity=0.7), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', line=dict(connectgaps=True, color='#2196f3', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_signal'], name='DEA', line=dict(connectgaps=True, color='#ff9800', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', line=dict(color='#2196f3', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_signal'], name='DEA', line=dict(color='#ff9800', width=1.5)), row=3, col=1)
     elif ind2 == "KDJ":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', line=dict(connectgaps=True, color='#2196f3', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', line=dict(connectgaps=True, color='#ff9800', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', line=dict(connectgaps=True, color='#e91e63', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', line=dict(color='#2196f3', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', line=dict(color='#ff9800', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', line=dict(color='#e91e63', width=1.5)), row=3, col=1)
     elif ind2 == "RSI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', line=dict(connectgaps=True, color='#9c27b0', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', line=dict(color='#9c27b0', width=1.5)), row=3, col=1)
     elif ind2 == "WR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', line=dict(connectgaps=True, color='#ff5722', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', line=dict(color='#ff5722', width=1.5)), row=3, col=1)
     elif ind2 == "CCI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', line=dict(connectgaps=True, color='#00bcd4', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', line=dict(color='#00bcd4', width=1.5)), row=3, col=1)
     elif ind2 == "ATR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', line=dict(connectgaps=True, color='#795548', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', line=dict(color='#795548', width=1.5)), row=3, col=1)
     elif ind2 == "OBV":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', line=dict(connectgaps=True, color='#00bcd4', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', line=dict(color='#00bcd4', width=1.5)), row=3, col=1)
 
 # 布局
 fig.update_layout(
