@@ -1,5 +1,5 @@
 """
-TradingView Demo v2.3.0 - 策略系统集成版 (完整编辑器)
+TradingView Demo v2.3.1 - 策略系统集成版 (修复自定义指标显示)
 """
 import streamlit as st
 import pandas as pd
@@ -9,8 +9,9 @@ import sqlite3
 import os
 import sys
 import random
+import traceback
 
-VERSION = "v2.3.0"
+VERSION = "v2.3.1"
 
 st.set_page_config(page_title=f"TradingView {VERSION}", page_icon="📈")
 st.markdown(f"<div style='text-align:right;color:#888;font-size:12px'>📦 {VERSION}</div>", unsafe_allow_html=True)
@@ -55,31 +56,20 @@ def generate_demo_data(days=200):
 # 初始化 session state
 if 'custom_indicator_code' not in st.session_state:
     st.session_state.custom_indicator_code = '''# 自定义指标示例
-# df 包含: open, high, low, close, vol
+# 返回: DataFrame 或 Series
 import pandas as pd
 
-def my_indicator(df, params):
-    """自定义指标 - 返回 Series 或 DataFrame"""
+def custom_indicator(df, params):
     period = params.get('period', 10)
-    
-    # 示例: 自定义振荡器
     ma = df['close'].rolling(period).mean()
     osc = (df['close'] - ma) / ma * 100
-    
-    return pd.DataFrame({
-        'ma': ma,
-        'oscillator': osc
-    })
-'''
+    return osc  # 返回 Series'''
 
 if 'custom_strategy_code' not in st.session_state:
     st.session_state.custom_strategy_code = '''# 自定义策略示例
-# df 包含: open, high, low, close, vol
-# 返回: 1=买入, -1=卖出, 0=持有
 import pandas as pd
 
-def my_strategy(df, params):
-    """自定义策略信号"""
+def custom_strategy(df, params):
     short = params.get('short', 5)
     long = params.get('long', 20)
     
@@ -87,11 +77,10 @@ def my_strategy(df, params):
     ma_long = df['close'].rolling(long).mean()
     
     signal = pd.Series(0, index=df.index)
-    signal[ma_short > ma_long] = 1   # 金叉买入
-    signal[ma_short < ma_long] = -1  # 死叉卖出
+    signal[ma_short > ma_long] = 1
+    signal[ma_short < ma_long] = -1
     
-    return signal
-'''
+    return signal'''
 
 # 尝试获取数据
 stocks_df = get_stocks(200)
@@ -135,7 +124,6 @@ with st.sidebar:
     # 🎯 策略系统
     st.subheader("🎯 策略系统")
     
-    # 策略模式选择
     mode = st.radio("模式", ["内置策略", "自定义策略"], horizontal=True)
     
     if mode == "内置策略":
@@ -157,27 +145,26 @@ with st.sidebar:
             macd_signal = st.number_input("MACD信号线", value=9, min_value=1, key="macd_sig")
     else:
         strategy_name = "自定义"
-        # 自定义策略代码编辑器
-        st.caption("编写你的策略代码:")
-        custom_code = st.text_area("策略代码", value=st.session_state.custom_strategy_code, height=150, key="strategy_editor")
+        custom_code = st.text_area("策略代码", value=st.session_state.custom_strategy_code, height=120, key="strategy_editor")
         st.session_state.custom_strategy_code = custom_code
         
-        # 策略参数
-        st.caption("策略参数")
         custom_params = {}
         custom_params['short'] = st.number_input("短期均线", value=5, min_value=1, key="custom_short")
         custom_params['long'] = st.number_input("长期均线", value=20, min_value=1, key="custom_long")
     
     st.divider()
     
-    # 📝 指标编辑器
-    with st.expander("📝 自定义指标", expanded=False):
-        st.caption("编写你的指标代码:")
-        custom_ind_code = st.text_area("指标代码", value=st.session_state.custom_indicator_code, height=150, key="indicator_editor")
+    # 📝 自定义指标
+    with st.expander("📝 自定义指标"):
+        st.caption("编写你的指标代码 (返回 Series):")
+        custom_ind_code = st.text_area("指标代码", value=st.session_state.custom_indicator_code, height=120, key="indicator_editor")
         st.session_state.custom_indicator_code = custom_ind_code
         
-        if st.button("🎨 应用指标", key="apply_indicator"):
-            st.success("指标已应用 (预览)")
+        # 指标颜色选择
+        ind_color = st.color_picker("指标颜色", "#00e676", key="ind_color")
+        
+        # 指标参数
+        ind_period = st.number_input("指标周期", value=10, min_value=1, key="ind_period")
     
     # 运行回测
     run_backtest = st.button("🚀 运行回测", type="primary")
@@ -229,6 +216,15 @@ df['atr'] = tr.rolling(14).mean()
 # OBV
 df['obv'] = (df['vol'] * ((df['close'] - df['close'].shift()) / df['close'].shift()).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)).cumsum()
 
+# 计算自定义指标
+custom_indicator_result = None
+try:
+    exec(custom_ind_code, globals())
+    params = {'period': ind_period}
+    custom_indicator_result = custom_indicator(df, params)
+except Exception as e:
+    st.error(f"指标计算错误: {e}")
+
 # 生成策略信号
 signals = pd.Series(0, index=df.index)
 
@@ -254,10 +250,9 @@ if mode == "内置策略":
         signals[(ma5 > ma20) & (df['rsi'] < 40)] = 1
         signals[(ma5 < ma20) | (df['rsi'] > 60)] = -1
 else:
-    # 自定义策略
     try:
         exec(custom_code, globals())
-        signals = my_strategy(df, custom_params)
+        signals = custom_strategy(df, custom_params)
     except Exception as e:
         st.error(f"策略代码错误: {e}")
 
@@ -293,9 +288,17 @@ col3.metric("最高", f"{latest['high']:.2f}")
 col4.metric("成交量", f"{latest['vol']:,.0f}")
 
 # 图表
-row_cnt = 2 if ind != "无" else 1
+row_cnt = 2 if ind != "无" or custom_indicator_result is not None else 1
 fig = make_subplots(rows=row_cnt, cols=1, row_heights=[0.6, 0.4] if row_cnt==2 else [1.0], 
-    vertical_spacing=0.05, subplot_titles=["K线", ind] if row_cnt==2 else ["K线"])
+    vertical_spacing=0.05)
+
+# 设置子图标题
+titles = ["K线"]
+if ind != "无":
+    titles.append(ind)
+if custom_indicator_result is not None:
+    titles.append("自定义指标")
+fig.update_layout(title_text=" | ".join(titles) if len(titles) > 1 else "K线")
 
 # K线
 fig.add_trace(go.Candlestick(x=df['trade_date'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
@@ -327,27 +330,49 @@ if strategy_name != "无":
             showlegend=False
         ), row=1, col=1)
 
-# 副图
-if ind != "无" and row_cnt == 2:
+# 副图 - 指标
+current_row = 2
+
+# 自定义指标 (优先显示)
+if custom_indicator_result is not None:
+    if isinstance(custom_indicator_result, pd.DataFrame):
+        for col in custom_indicator_result.columns:
+            fig.add_trace(go.Scatter(
+                x=df['trade_date'], y=custom_indicator_result[col],
+                name=col, connectgaps=True,
+                line=dict(color=ind_color, width=1.5)
+            ), row=current_row, col=1)
+    else:
+        fig.add_trace(go.Scatter(
+            x=df['trade_date'], y=custom_indicator_result,
+            name='自定义指标', connectgaps=True,
+            line=dict(color=ind_color, width=1.5)
+        ), row=current_row, col=1)
+    current_row += 1
+    if current_row > row_cnt:
+        row_cnt = current_row
+
+# 内置副图指标
+if ind != "无" and current_row <= 2:
     if ind == "MACD":
         cols = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
-        fig.add_trace(go.Bar(x=df['trade_date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Bar(x=df['trade_date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=current_row, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=current_row, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=current_row, col=1)
     elif ind == "KDJ":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=current_row, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=current_row, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=current_row, col=1)
     elif ind == "RSI":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=current_row, col=1)
     elif ind == "WR":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=current_row, col=1)
     elif ind == "CCI":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=current_row, col=1)
     elif ind == "ATR":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=current_row, col=1)
     elif ind == "OBV":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=current_row, col=1)
 
 fig.update_layout(template='plotly_dark', height=600, margin=dict(l=50, r=50, t=50, b=50),
     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -359,4 +384,6 @@ st.plotly_chart(fig, use_container_width=True)
 info = f"📊 {ts_code} | {len(df)}条"
 if strategy_name != "无":
     info += f" | 策略: {strategy_name}"
+if custom_indicator_result is not None:
+    info += " | 自定义指标: ✅"
 st.caption(info)
