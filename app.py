@@ -116,15 +116,18 @@ elif row_count == 3:
 else:
     heights = [0.35, 0.15, 0.2, 0.3]
 
+# 子图标题
+titles = ['K线 + 均线']
+if show_vol: titles.append('成交量')
+if show_macd: titles.append('MACD')
+if show_kdj: titles.append('KDJ')
+if show_rsi: titles.append('RSI')
+
 fig = make_subplots(
     rows=row_count, cols=1,
     row_heights=heights,
     vertical_spacing=0.05,
-    subplot_titles=titles := ['K线 + 均线'] + 
-        (['成交量'] if show_vol else []) +
-        (['MACD'] if show_macd else []) +
-        (['KDJ'] if show_kdj else []) +
-        (['RSI'] if show_rsi else [])
+    subplot_titles=titles
 )
 
 row = 1
