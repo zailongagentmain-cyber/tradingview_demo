@@ -1,5 +1,5 @@
 """
-TradingView Demo v2.1.0 - 策略系统版
+TradingView Demo v2.2.0 - 策略系统集成版 (弹出式编辑器)
 """
 import streamlit as st
 import pandas as pd
@@ -9,10 +9,7 @@ import sqlite3
 import os
 import sys
 
-VERSION = "v2.1.0"
-
-# 添加项目路径
-sys.path.insert(0, os.path.dirname(__file__))
+VERSION = "v2.2.0"
 
 st.set_page_config(page_title=f"TradingView {VERSION}", page_icon="📈")
 st.markdown(f"<div style='text-align:right;color:#888;font-size:12px'>📦 {VERSION}</div>", unsafe_allow_html=True)
@@ -41,6 +38,8 @@ with st.sidebar:
     sel = st.selectbox("股票", list(stock_opts.keys()), key="stock")
     ts_code = stock_opts.get(sel, "000001.SZ")
     
+    st.divider()
+    
     # 均线设置
     st.subheader("📈 均线")
     ma5 = st.checkbox("MA5", value=True)
@@ -52,6 +51,37 @@ with st.sidebar:
     # 副图指标
     st.subheader("📉 副图指标")
     ind = st.selectbox("指标", ["无", "MACD", "KDJ", "RSI", "WR", "CCI", "ATR", "OBV"], index=1)
+    
+    st.divider()
+    
+    # 策略系统 - 弹出式
+    st.subheader("🎯 策略系统")
+    
+    # 内置策略选择
+    strategy_name = st.selectbox(
+        "选择策略",
+        ["无", "MA_CROSS", "RSI", "MACD", "DUAL_MA_RSI"],
+        key="strategy_select"
+    )
+    
+    # 参数设置
+    if strategy_name == "MA_CROSS":
+        st.caption("参数设置")
+        fast_period = st.number_input("短期均线", value=5, min_value=1, key="ma_fast")
+        slow_period = st.number_input("长期均线", value=20, min_value=1, key="ma_slow")
+    elif strategy_name == "RSI":
+        st.caption("参数设置")
+        rsi_period = st.number_input("RSI周期", value=14, min_value=1, key="rsi_n")
+        oversold = st.slider("超卖阈值", 10, 40, 30, key="rsi_oversold")
+        overbought = st.slider("超买阈值", 60, 90, 70, key="rsi_overbought")
+    elif strategy_name == "MACD":
+        st.caption("参数设置")
+        macd_fast = st.number_input("MACD快线", value=12, min_value=1, key="macd_fast")
+        macd_slow = st.number_input("MACD慢线", value=26, min_value=1, key="macd_slow")
+        macd_signal = st.number_input("MACD信号线", value=9, min_value=1, key="macd_sig")
+    
+    # 运行回测按钮
+    run_backtest = st.button("🚀 运行回测", type="primary")
 
 # 获取数据
 df = get_klines(ts_code, 500)
@@ -60,7 +90,7 @@ if df.empty:
     st.warning("无数据")
     st.stop()
 
-# 计算指标
+# 计算基础指标
 for n in [5, 10, 20, 30, 60]:
     df[f'ma{n}'] = df['close'].rolling(n).mean()
 
@@ -97,6 +127,47 @@ df['atr'] = tr.rolling(14).mean()
 # OBV
 df['obv'] = (df['vol'] * ((df['close'] - df['close'].shift()) / df['close'].shift()).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)).cumsum()
 
+# 生成策略信号
+signals = pd.Series(0, index=df.index)
+if strategy_name == "MA_CROSS":
+    ma_fast = df['close'].rolling(fast_period).mean()
+    ma_slow = df['close'].rolling(slow_period).mean()
+    signals[ma_fast > ma_slow] = 1
+    signals[ma_fast < ma_slow] = -1
+elif strategy_name == "RSI":
+    signals[df['rsi'] < oversold] = 1
+    signals[df['rsi'] > overbought] = -1
+elif strategy_name == "MACD":
+    ema_fast = df['close'].ewm(span=macd_fast).mean()
+    ema_slow = df['close'].ewm(span=macd_slow).mean()
+    dif = ema_fast - ema_slow
+    dea = dif.ewm(span=macd_signal).mean()
+    signals[dif > dea] = 1
+    signals[dif < dea] = -1
+
+# 运行回测
+if run_backtest and strategy_name != "无":
+    from core import Backtester
+    
+    bt = Backtester(100000)
+    results = bt.run(df, signals)
+    
+    st.divider()
+    st.subheader("📊 回测结果")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("初始资金", f"¥{results['initial_capital']:,.0f}")
+    col2.metric("最终权益", f"¥{results['final_equity']:,.0f}")
+    col3.metric("收益率", f"{results['total_return']:.2f}%", delta_color="normal")
+    col4.metric("最大回撤", f"{results['max_drawdown']:.2f}%")
+    
+    col5, col6, col7 = st.columns(3)
+    col5.metric("交易次数", results['total_trades'])
+    col6.metric("买入次数", results['buy_count'])
+    col7.metric("卖出次数", results['sell_count'])
+    
+    st.divider()
+
 # 统计
 latest, prev = df.iloc[-1], df.iloc[-2]
 col1, col2, col3, col4 = st.columns(4)
@@ -120,6 +191,25 @@ if ma10: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma10'], name='MA10',
 if ma20: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma20'], name='MA20', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=1, col=1)
 if ma30: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma30'], name='MA30', connectgaps=True, line=dict(color='#4caf50', width=1.5)), row=1, col=1)
 if ma60: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma60'], name='MA60', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=1, col=1)
+
+# 策略信号标记
+if strategy_name != "无":
+    buy_signals = df.index[signals == 1]
+    sell_signals = df.index[signals == -1]
+    
+    for idx in buy_signals[-10:]:  # 只显示最近10个
+        fig.add_trace(go.Scatter(
+            x=[df['trade_date'].iloc[idx]], y=[df['low'].iloc[idx] * 0.98],
+            mode='markers', name='买入', marker=dict(symbol='triangle-up', size=12, color='#00e676'),
+            showlegend=False
+        ), row=1, col=1)
+    
+    for idx in sell_signals[-10:]:
+        fig.add_trace(go.Scatter(
+            x=[df['trade_date'].iloc[idx]], y=[df['high'].iloc[idx] * 1.02],
+            mode='markers', name='卖出', marker=dict(symbol='triangle-down', size=12, color='#ff1744'),
+            showlegend=False
+        ), row=1, col=1)
 
 # 副图
 if ind != "无" and row_cnt == 2:
@@ -149,4 +239,9 @@ fig.update_layout(template='plotly_dark', height=600, margin=dict(l=50, r=50, t=
 fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
 st.plotly_chart(fig, use_container_width=True)
-st.caption(f"📊 {ts_code} | {len(df)}条 | MA5/10/30/60 | {ind}")
+
+# 底部信息
+info = f"📊 {ts_code} | {len(df)}条"
+if strategy_name != "无":
+    info += f" | 策略: {strategy_name}"
+st.caption(info)
