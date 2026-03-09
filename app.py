@@ -188,8 +188,8 @@ if show_rsi:
     fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', 
         line=dict(color='#9c27b0', width=1.5)), row=row, col=1)
     # 添加RSI参考线
-    fig.add_hline(y=70, line_dash="dash", line_color="gray", row=row, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="gray", row=row, col=1)
+    fig.add_hline(y=70, line_dash="solid", line_color="gray", row=row, col=1, opacity=0.5)
+    fig.add_hline(y=30, line_dash="solid", line_color="gray", row=row, col=1, opacity=0.5)
 
 # 布局
 fig.update_layout(
