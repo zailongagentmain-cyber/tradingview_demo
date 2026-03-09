@@ -187,9 +187,11 @@ if show_kdj:
 if show_rsi:
     fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', 
         line=dict(color='#9c27b0', width=1.5)), row=row, col=1)
-    # 添加RSI参考线
-    fig.add_hline(y=70, line_dash="solid", line_color="gray", row=row, col=1, opacity=0.5)
-    fig.add_hline(y=30, line_dash="solid", line_color="gray", row=row, col=1, opacity=0.5)
+    # RSI参考线 - 使用add_shape
+    fig.add_shape(type="line", x0=df['date'].iloc[0], x1=df['date'].iloc[-1], y0=70, y1=70,
+                  line=dict(color="gray", width=1, dash="solid"), row=row, col=1)
+    fig.add_shape(type="line", x0=df['date'].iloc[0], x1=df['date'].iloc[-1], y0=30, y1=30,
+                  line=dict(color="gray", width=1, dash="solid"), row=row, col=1)
 
 # 布局
 fig.update_layout(
