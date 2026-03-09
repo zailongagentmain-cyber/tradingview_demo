@@ -288,9 +288,8 @@ col3.metric("最高", f"{latest['high']:.2f}")
 col4.metric("成交量", f"{latest['vol']:,.0f}")
 
 # 图表 - 固定3行结构
-row_cnt = 3
-# 子图标题
-titles = ["K线", ind if ind != "无" else "", "自定义指标" if custom_indicator_result else ""]
+show_custom = custom_indicator_result is not None and not custom_indicator_result.empty
+titles = ["K线", ind if ind != "无" else "", "自定义指标" if show_custom else ""]
 fig = make_subplots(rows=3, cols=1, row_heights=[0.45, 0.275, 0.275], 
     vertical_spacing=0.03,
     subplot_titles=titles)
@@ -348,7 +347,7 @@ if ind != "无":
         fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
 
 # 自定义指标 (第3行)
-if custom_indicator_result is not None:
+if show_custom:
     if isinstance(custom_indicator_result, pd.DataFrame):
         for col in custom_indicator_result.columns:
             fig.add_trace(go.Scatter(
@@ -373,6 +372,6 @@ st.plotly_chart(fig, use_container_width=True)
 info = f"📊 {ts_code} | {len(df)}条"
 if strategy_name != "无":
     info += f" | 策略: {strategy_name}"
-if custom_indicator_result is not None:
+if show_custom:
     info += " | 自定义指标: ✅"
 st.caption(info)
