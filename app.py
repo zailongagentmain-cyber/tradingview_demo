@@ -1,52 +1,62 @@
 """
-TradingView Demo v2.0.4
-⚠️ 所有 Scatter 线必须加 connectgaps=True 参数！
+TradingView Demo v2.0.5 - 本地数据库版
 """
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import random
+import sqlite3
+import os
 
-VERSION = "v2.0.4"
+VERSION = "v2.0.5"
 
 st.set_page_config(page_title=f"TradingView {VERSION}", page_icon="📈")
 st.markdown(f"<div style='text-align:right;color:#888;font-size:12px'>📦 {VERSION}</div>", unsafe_allow_html=True)
 st.title("📈 股票K线")
 
-DEMO_STOCKS = [
-    {"ts_code": "000001.SZ", "name": "平安银行"},
-    {"ts_code": "600519.SH", "name": "贵州茅台"},
-    {"ts_code": "600000.SH", "name": "浦发银行"},
-    {"ts_code": "600036.SH", "name": "招商银行"},
-    {"ts_code": "000002.SZ", "name": "万科A"},
-]
+DB_PATH = os.path.expanduser("~/projects/tradingview-demo/data/tradingview.db")
 
-random.seed(42)
-data = []
-price = 12.0
-for i in range(200):
-    o = round(price + random.uniform(-0.3, 0.3), 2)
-    c = round(o + random.uniform(-0.5, 0.5), 2)
-    h = round(max(o, c) + random.uniform(0, 0.3), 2)
-    l = round(min(o, c) - random.uniform(0, 0.3), 2)
-    v = random.randint(1000000, 5000000)
-    data.append({"date": f"2024-{i//30+1}-{i%30+1}", "open": o, "high": h, "low": l, "close": c, "vol": v})
-    price = c
-df = pd.DataFrame(data)
+def get_stocks(limit=200):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql(f"SELECT ts_code, name FROM stocks LIMIT {limit}", conn)
+    conn.close()
+    return df
 
-# 技术指标
-for n in [5, 10, 20, 30, 60, 120]:
+def get_klines(ts_code, limit=500):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql(f"SELECT trade_date, open, high, low, close, vol FROM daily_klines WHERE ts_code = '{ts_code}' ORDER BY trade_date ASC LIMIT {limit}", conn)
+    conn.close()
+    return df
+
+# 加载数据
+stocks_df = get_stocks(200)
+STOCKS = stocks_df.to_dict('records') if not stocks_df.empty else []
+
+with st.sidebar:
+    st.caption("数据库: ✅ 已连接")
+    stock_opts = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for s in STOCKS}
+    sel = st.selectbox("股票", list(stock_opts.keys()), key="stock")
+    ts_code = stock_opts.get(sel, "000001.SZ")
+    
+    st.subheader("均线")
+    ma5 = st.checkbox("MA5", value=True)
+    ma10 = st.checkbox("MA10", value=True)
+    ma20 = st.checkbox("MA20", value=False)
+    ma30 = st.checkbox("MA30", value=False)
+    ma60 = st.checkbox("MA60", value=False)
+    
+    st.subheader("副图")
+    ind = st.selectbox("指标", ["无", "MACD", "KDJ", "RSI", "WR", "CCI", "ATR", "OBV"], index=1)
+
+df = get_klines(ts_code, 500)
+
+if df.empty:
+    st.warning("无数据")
+    st.stop()
+
+# 指标计算
+for n in [5, 10, 20, 30, 60]:
     df[f'ma{n}'] = df['close'].rolling(n).mean()
-for n in [5, 10, 12, 20, 26]:
-    df[f'ema{n}'] = df['close'].ewm(span=n, adjust=False).mean()
-df['bbi'] = (df['ma5'] + df['ma10'] + df['ma20'] + df['ma60']) / 4
-
-def calc_bollinger(close, n=20):
-    ma = close.rolling(n).mean()
-    std = close.rolling(n).std()
-    return ma + std*2, ma, ma - std*2
-df['boll_u'], df['boll_m'], df['boll_l'] = calc_bollinger(df['close'])
 
 df['macd'] = df['close'].ewm(span=12).mean() - df['close'].ewm(span=26).mean()
 df['macd_sig'] = df['macd'].ewm(span=9).mean()
@@ -59,7 +69,8 @@ df['kdj_d'] = df['kdj_k'].ewm(com=2).mean()
 df['kdj_j'] = 3 * df['kdj_k'] - 2 * df['kdj_d']
 
 delta = df['close'].diff()
-gain, loss = delta.where(delta > 0, 0).rolling(14).mean(), (-delta.where(delta < 0, 0)).rolling(14).mean()
+gain = delta.where(delta > 0, 0).rolling(14).mean()
+loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
 df['rsi'] = 100 - (100 / (1 + gain / loss))
 
 high14, low14 = df['high'].rolling(14).max(), df['low'].rolling(14).min()
@@ -73,27 +84,6 @@ df['atr'] = tr.rolling(14).mean()
 
 df['obv'] = (df['vol'] * ((df['close'] - df['close'].shift()) / df['close'].shift()).apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)).cumsum()
 
-# 侧边栏
-with st.sidebar:
-    st.selectbox("股票", [f"{s['ts_code']} {s['name']}" for s in DEMO_STOCKS], key="stock")
-    st.subheader("📊 均线")
-    ma_opts = {k: v for k, v in {
-        'MA5': st.checkbox("MA5", value=True),
-        'MA10': st.checkbox("MA10", value=True),
-        'MA20': st.checkbox("MA20", value=False),
-        'MA30': st.checkbox("MA30", value=False),
-        'MA60': st.checkbox("MA60", value=False),
-        'MA120': st.checkbox("MA120", value=False),
-        'EMA12': st.checkbox("EMA12", value=False),
-        'EMA26': st.checkbox("EMA26", value=False),
-        'BBI': st.checkbox("BBI", value=False),
-        'BOLL': st.checkbox("BOLL", value=False),
-    }.items() if v}
-    
-    st.subheader("📈 副图")
-    ind1 = st.selectbox("副图1", ["无", "MACD", "KDJ", "RSI", "WR", "CCI", "ATR", "OBV"], index=1)
-    ind2 = st.selectbox("副图2", ["无"] + ["MACD", "KDJ", "RSI", "WR", "CCI", "ATR", "OBV"], index=0)
-
 # 统计
 latest, prev = df.iloc[-1], df.iloc[-2]
 col1, col2, col3, col4 = st.columns(4)
@@ -103,74 +93,44 @@ col3.metric("最高", f"{latest['high']:.2f}")
 col4.metric("成交量", f"{latest['vol']:,.0f}")
 
 # 图表
-ma_colors = {'MA5': '#e91e63', 'MA10': '#ff9800', 'MA20': '#2196f3', 'MA30': '#4caf50', 'MA60': '#9c27b0', 'MA120': '#607d8b', 'EMA12': '#00bcd4', 'EMA26': '#ff5722', 'BBI': '#ffeb3b'}
+row_cnt = 2 if ind != "无" else 1
+fig = make_subplots(rows=row_cnt, cols=1, row_heights=[0.6, 0.4] if row_cnt==2 else [1.0], 
+    vertical_spacing=0.05, subplot_titles=["K线", ind] if row_cnt==2 else ["K线"])
 
-fig = make_subplots(rows=3, cols=1, row_heights=[0.45, 0.275, 0.275], vertical_spacing=0.03, 
-    subplot_titles=["K线", ind1 if ind1 != "无" else "", ind2 if ind2 != "无" else ""])
-
-# K线
-fig.add_trace(go.Candlestick(x=df['date'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
+fig.add_trace(go.Candlestick(x=df['trade_date'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
     name='K线', increasing_line_color='#26a69a', decreasing_line_color='#ef5350'), row=1, col=1)
 
-# 均线
-for ma in ma_opts:
-    if ma == 'BOLL':
-        fig.add_trace(go.Scatter(x=df['date'], y=df['boll_u'], name='BOLL上', connectgaps=True,
-            line=dict(color='rgba(255,255,255,0.2)', width=1), showlegend=False), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['boll_l'], name='BOLL下', connectgaps=True,
-            line=dict(color='rgba(255,255,255,0.2)', width=1), fill='tonexty', fillcolor='rgba(255,255,255,0.05)', showlegend=False), row=1, col=1)
-    else:
-        fig.add_trace(go.Scatter(x=df['date'], y=df[ma.lower()], name=ma, connectgaps=True,
-            line=dict(color=ma_colors.get(ma, '#fff'), width=1.5)), row=1, col=1)
+if ma5: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma5'], name='MA5', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=1, col=1)
+if ma10: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma10'], name='MA10', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=1, col=1)
+if ma20: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma20'], name='MA20', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=1, col=1)
+if ma30: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma30'], name='MA30', connectgaps=True, line=dict(color='#4caf50', width=1.5)), row=1, col=1)
+if ma60: fig.add_trace(go.Scatter(x=df['trade_date'], y=df['ma60'], name='MA60', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=1, col=1)
 
-# 副图1
-if ind1 != "无":
-    if ind1 == "MACD":
+if ind != "无" and row_cnt == 2:
+    if ind == "MACD":
         cols = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
-        fig.add_trace(go.Bar(x=df['date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
-    elif ind1 == "KDJ":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=2, col=1)
-    elif ind1 == "RSI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=2, col=1)
-    elif ind1 == "WR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=2, col=1)
-    elif ind1 == "CCI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
-    elif ind1 == "ATR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=2, col=1)
-    elif ind1 == "OBV":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
-
-# 副图2
-if ind2 != "无":
-    if ind2 == "MACD":
-        cols = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
-        fig.add_trace(go.Bar(x=df['date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=3, col=1)
-    elif ind2 == "KDJ":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=3, col=1)
-    elif "RSI" in ind2:
-        fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=3, col=1)
-    elif ind2 == "WR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=3, col=1)
-    elif ind2 == "CCI":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=3, col=1)
-    elif ind2 == "ATR":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=3, col=1)
-    elif ind2 == "OBV":
-        fig.add_trace(go.Scatter(x=df['date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=3, col=1)
+        fig.add_trace(go.Bar(x=df['trade_date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+    elif ind == "KDJ":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=2, col=1)
+    elif ind == "RSI":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=2, col=1)
+    elif ind == "WR":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=2, col=1)
+    elif ind == "CCI":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
+    elif ind == "ATR":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=2, col=1)
+    elif ind == "OBV":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
 
 fig.update_layout(template='plotly_dark', height=600, margin=dict(l=50, r=50, t=50, b=50),
     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    xaxis_rangeslider_visible=False, xaxis2_rangeslider_visible=False, xaxis3_rangeslider_visible=False)
+    xaxis_rangeslider_visible=False)
 fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
 st.plotly_chart(fig, use_container_width=True)
-st.caption(f"📊 均线: {', '.join(ma_opts.keys()) if ma_opts else '无'} | 副图: {ind1} / {ind2}")
+st.caption(f"📊 {ts_code} | {len(df)}条 | MA5/10/30/60 | {ind}")
