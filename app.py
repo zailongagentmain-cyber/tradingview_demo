@@ -1,6 +1,7 @@
 """
 TradingView Demo - 云端兼容版
 支持本地 SQLite 和云端演示模式
+高度还原 TradingView 风格
 """
 import streamlit as st
 import pandas as pd
@@ -33,147 +34,293 @@ try:
 except Exception as e:
     st.warning(f"数据库模式: {str(e)[:50]}...")
 
-# 演示数据（当数据库不可用时）
+# 演示数据
 DEMO_STOCKS = [
-    {"ts_code": "000001.SZ", "name": "平安银行", "market": "SZSE"},
-    {"ts_code": "600519.SH", "name": "贵州茅台", "market": "SSE"},
-    {"ts_code": "600000.SH", "name": "浦发银行", "market": "SSE"},
-    {"ts_code": "000002.SZ", "name": "万科A", "market": "SZSE"},
-    {"ts_code": "600036.SH", "name": "招商银行", "market": "SSE"},
+    {"ts_code": "000001.SZ", "name": "平安银行"},
+    {"ts_code": "600519.SH", "name": "贵州茅台"},
+    {"ts_code": "600000.SH", "name": "浦发银行"},
+    {"ts_code": "600036.SH", "name": "招商银行"},
+    {"ts_code":  "000002.SZ", "name": "万科A"},
 ]
 
-DEMO_KLINES = [
-    {"trade_date": "20241101", "open": 11.5, "high": 11.8, "low": 11.4, "close": 11.7, "vol": 1500000},
-    {"trade_date": "20241104", "open": 11.7, "high": 12.0, "low": 11.6, "close": 11.9, "vol": 1800000},
-    {"trade_date": "20241105", "open": 11.9, "high": 12.2, "low": 11.8, "close": 12.1, "vol": 2000000},
-    {"trade_date": "20241106", "open": 12.1, "high": 12.5, "low": 12.0, "close": 12.3, "vol": 2200000},
-    {"trade_date": "20241107", "open": 12.3, "high": 12.6, "low": 12.2, "close": 12.5, "vol": 2100000},
-    {"trade_date": "20241108", "open": 12.5, "high": 12.8, "low": 12.4, "close": 12.7, "vol": 2500000},
-    {"trade_date": "20241111", "open": 12.7, "high": 13.0, "low": 12.6, "close": 12.9, "vol": 2300000},
-    {"trade_date": "20241112", "open": 12.9, "high": 13.2, "low": 12.8, "close": 13.1, "vol": 2600000},
-    {"trade_date": "20241113", "open": 13.1, "high": 13.4, "low": 13.0, "close": 13.3, "vol": 2400000},
-    {"trade_date": "20241114", "open": 13.3, "high": 13.5, "low": 13.2, "close": 13.4, "vol": 2000000},
-]
+# 生成更丰富的演示数据
+import random
+random.seed(42)
+base_price = 12.0
+DEMO_KLINES = []
+for i in range(60):
+    date = f"2024-{11+i//30:02d}-{(i%30)+1:02d}"
+    if i % 7 in [5, 6]:  # 周末跳过
+        continue
+    open_p = base_price + random.uniform(-0.5, 0.5)
+    close_p = open_p + random.uniform(-0.8, 0.8)
+    high_p = max(open_p, close_p) + random.uniform(0, 0.5)
+    low_p = min(open_p, close_p) - random.uniform(0, 0.5)
+    vol = random.randint(1000000, 5000000)
+    DEMO_KLINES.append({
+        "trade_date": date.replace("-", ""),
+        "time": date,  # YYYY-MM-DD format for lightweight-charts
+        "open": round(open_p, 2),
+        "high": round(high_p, 2),
+        "low": round(low_p, 2),
+        "close": round(close_p, 2),
+        "vol": vol,
+    })
+    base_price = close_p
 
 # 侧边栏 - 股票选择
 with st.sidebar:
     st.header("📊 股票选择")
     st.caption(f"数据库: {'✅ 已连接' if DB_AVAILABLE else '❌ 演示模式'}")
     
+    # 股票列表
     if DB_AVAILABLE and db:
-        # 从数据库获取
         try:
-            stocks = db.get_stocks(limit=1000)
+            stocks = db.get_stocks(limit=500)
             stock_options = {f"{row['ts_code']} - {row['name']}": row['ts_code'] 
                            for _, row in stocks.iterrows()}
         except:
             stock_options = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for s in DEMO_STOCKS}
     else:
-        # 演示模式
         stock_options = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for s in DEMO_STOCKS}
     
     selected = st.selectbox("选择股票", list(stock_options.keys()), key="stock_select")
     ts_code = stock_options.get(selected, "000001.SZ")
-
-# 主区域
-col1, col2 = st.columns([1, 3])
-
-with col1:
-    st.subheader("📈 行情数据")
     
-    # 获取K线
-    if DB_AVAILABLE and db:
-        try:
-            klines = db.get_klines(ts_code, limit=500)
-        except:
-            klines = pd.DataFrame(DEMO_KLINES)
+    # 技术指标选择
+    st.divider()
+    st.subheader("⚙️ 显示设置")
+    show_ma = st.checkbox("均线 (MA5/10/20)", value=True)
+    show_volume = st.checkbox("成交量", value=True)
+    show_macd = st.checkbox("MACD", value=False)
+
+# 获取K线数据
+if DB_AVAILABLE and db:
+    try:
+        klines = db.get_klines(ts_code, limit=500)
+    except:
+        klines = pd.DataFrame(DEMO_KLINES)
+else:
+    klines = pd.DataFrame(DEMO_KLINES)
+
+if klines.empty:
+    st.warning(f"暂无 {ts_code} 的数据")
+    klines = pd.DataFrame(DEMO_KLINES)
+
+# 转换数据格式
+chart_candles = []
+chart_volume = []
+chart_ma5 = []
+chart_ma10 = []
+chart_ma20 = []
+
+# 计算均线
+klines['ma5'] = klines['close'].rolling(window=5).mean()
+klines['ma10'] = klines['close'].rolling(window=10).mean()
+klines['ma20'] = klines['close'].rolling(window=20).mean()
+
+for i, row in klines.iterrows():
+    # 日期格式转换
+    trade_date = str(row['trade_date'])
+    if len(trade_date) == 8:
+        time_str = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
     else:
-        klines = pd.DataFrame(DEMO_KLINES)
+        time_str = trade_date
     
-    if klines.empty:
-        st.warning(f"暂无 {ts_code} 的数据")
-        klines = pd.DataFrame(DEMO_KLINES)
+    open_p = float(row['open'])
+    high_p = float(row['high'])
+    low_p = float(row['low'])
+    close_p = float(row['close'])
+    vol = float(row['vol']) if 'vol' in row else 0
     
-    # 数据概览
-    if len(klines) > 0:
-        latest = klines.iloc[-1]
-        prev = klines.iloc[-2] if len(klines) > 1 else latest
-        
-        change = float(latest['close']) - float(prev['close'])
-        pct_chg = (change / float(prev['close'])) * 100 if float(prev['close']) else 0
-        
-        st.metric("收盘价", f"{latest['close']:.2f}", 
-                 delta=f"{change:.2f} ({pct_chg:.2f}%)")
-        st.caption(f"日期: {latest['trade_date']}")
-        st.caption(f"成交量: {latest['vol']:,.0f}")
+    # K线数据
+    chart_candles.append({
+        "time": time_str,
+        "open": open_p,
+        "high": high_p,
+        "low": low_p,
+        "close": close_p,
+    })
+    
+    # 成交量数据 (颜色根据涨跌)
+    color = "#26a69a" if close_p >= open_p else "#ef5350"
+    chart_volume.append({
+        "time": time_str,
+        "value": vol,
+        "color": color,
+    })
+    
+    # 均线数据
+    if pd.notna(row.get('ma5')):
+        chart_ma5.append({"time": time_str, "value": float(row['ma5'])})
+    if pd.notna(row.get('ma10')):
+        chart_ma10.append({"time": time_str, "value": float(row['ma10'])})
+    if pd.notna(row.get('ma20')):
+        chart_ma20.append({"time": time_str, "value": float(row['ma20'])})
 
-with col2:
-    # 转换为 lightweight-charts 格式
-    chart_data = []
-    for _, row in klines.iterrows():
-        chart_data.append({
-            "time": str(row['trade_date']),
-            "open": float(row['open']),
-            "high": float(row['high']),
-            "low": float(row['low']),
-            "close": float(row['close']),
-        })
-    
-    chart_data_json = json.dumps(chart_data)
-    
-    # 生成 HTML
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-        <style>
-            body { margin: 0; padding: 20px; background: #1a1a1a; }
-            #chart { width: 100%; height: 500px; }
-        </style>
-    </head>
-    <body>
+# 生成图表 HTML
+chart_candles_json = json.dumps(chart_candles)
+chart_volume_json = json.dumps(chart_volume)
+chart_ma5_json = json.dumps(chart_ma5)
+chart_ma10_json = json.dumps(chart_ma10)
+chart_ma20_json = json.dumps(chart_ma20)
+
+html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <script src="https://unpkg.com/lightweight-charts@5.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body {{ margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+        #chart {{ width: 100%; height: 500px; }}
+        #volume {{ width: 100%; height: 120px; }}
+        .container {{ padding: 20px; background: #131722; }}
+    </style>
+</head>
+<body>
+    <div class="container">
         <div id="chart"></div>
-        <script>
-            var chart = LightweightCharts.createChart(document.getElementById('chart'), {
-                layout: {
-                    background: { color: '#1a1a1a' },
-                    textColor: '#d1d4dc',
-                },
-                grid: {
-                    vertLines: { color: '#2b2b43' },
-                    horzLines: { color: '#2b2b43' },
-                },
-                crosshair: {
-                    mode: LightweightCharts.CrosshairMode.Normal,
-                },
-                rightPriceScale: {
-                    borderColor: '#2b2b43',
-                },
-                timeScale: {
-                    borderColor: '#2b2b43',
-                },
-            });
-            
-            var candleSeries = chart.addCandlestickSeries({
-                upColor: '#26a69a',
-                downColor: '#ef5350',
-                borderVisible: false,
-                wickUpColor: '#26a69a',
-                wickDownColor: '#ef5350',
-            });
-            
-            candleSeries.setData(CHART_DATA);
-            
-            chart.timeScale().fitContent();
-        </script>
-    </body>
-    </html>
-    """.replace('CHART_DATA', chart_data_json)
+        <div id="volume"></div>
+    </div>
     
-    if chart_data:
-        st.components.v1.html(html, height=550)
+    <script>
+        // 主图 - K线 + 均线
+        const chart = LightweightCharts.createChart(document.getElementById('chart'), {{
+            layout: {{
+                background: {{ type: 'solid', color: '#131722' }},
+                textColor: '#d1d4dc',
+            }},
+            grid: {{
+                vertLines: {{ color: '#242832' }},
+                horzLines: {{ color: '#242832' }},
+            }},
+            crosshair: {{
+                mode: LightweightCharts.CrosshairMode.Normal,
+            }},
+            rightPriceScale: {{
+                borderColor: '#363a45',
+            }},
+            timeScale: {{
+                borderColor: '#363a45',
+                timeVisible: true,
+                secondsVisible: false,
+            }},
+        }});
+
+        // K线系列
+        const candleSeries = chart.addCandlestickSeries({{
+            upColor: '#26a69a',
+            downColor: '#ef5350',
+            borderVisible: false,
+            wickUpColor: '#26a69a',
+            wickDownColor: '#ef5350',
+        }});
+        
+        candleSeries.setData({chart_candles_json});
+        
+        // 均线系列
+        const ma5Series = chart.addLineSeries({{
+            color: '#e91e63',
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+        }});
+        ma5Series.setData({chart_ma5_json});
+        
+        const ma10Series = chart.addLineSeries({{
+            color: '#ff9800',
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+        }});
+        ma10Series.setData({chart_ma10_json});
+        
+        const ma20Series = chart.addLineSeries({{
+            color: '#2196f3',
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+        }});
+        ma20Series.setData({chart_ma20_json});
+        
+        // 成交量图
+        const volumeChart = LightweightCharts.createChart(document.getElementById('volume'), {{
+            layout: {{
+                background: {{ type: 'solid', color: '#131722' }},
+                textColor: '#d1d4dc',
+            }},
+            grid: {{
+                vertLines: {{ color: '#242832' }},
+                horzLines: {{ color: '#242832' }},
+            }},
+            rightPriceScale: {{
+                borderColor: '#363a45',
+            }},
+            timeScale: {{
+                borderColor: '#363a45',
+                timeVisible: true,
+            }},
+        }});
+        
+        const volumeSeries = volumeChart.addHistogramSeries({{
+            color: '#26a69a',
+            priceFormat: {{
+                type: 'volume',
+            }},
+            priceScaleId: '',
+        }});
+        
+        volumeSeries.priceScale().applyOptions({{
+            scaleMargins: {{
+                top: 0.8,
+                bottom: 0,
+            }},
+        }});
+        
+        volumeSeries.setData({chart_volume_json});
+        
+        // 同步时间轴
+        chart.timeScale().subscribeVisibleTimeRangeChange(({{
+            from,
+            to,
+        }}) => {{
+            volumeChart.timeScale().setVisibleRange({{
+                from,
+                to,
+            }});
+        }});
+        
+        // 自适应
+        chart.timeScale().fitContent();
+        volumeChart.timeScale().fitContent();
+        
+        // 响应式
+        window.addEventListener('resize', () => {{
+            chart.resize(document.getElementById('chart').clientWidth, 500);
+            volumeChart.resize(document.getElementById('volume').clientWidth, 120);
+        }});
+    </script>
+</body>
+</html>
+"""
+
+# 显示数据概览
+col1, col2, col3, col4 = st.columns(4)
+latest = klines.iloc[-1] if len(klines) > 0 else None
+prev = klines.iloc[-2] if len(klines) > 1 else latest
+
+if latest is not None:
+    change = float(latest['close']) - float(prev['close'])
+    pct_chg = (change / float(prev['close'])) * 100 if float(prev['close']) else 0
+    
+    col1.metric("收盘价", f"{float(latest['close']):.2f}")
+    col2.metric("涨跌", f"{change:.2f}", f"{pct_chg:.2f}%")
+    col3.metric("最高", f"{float(latest['high']):.2f}")
+    col4.metric("成交量", f"{float(latest.get('vol', 0)):,.0f}")
+
+# 显示图表
+st.components.v1.html(html, height=700)
 
 # 底部信息
 st.divider()
