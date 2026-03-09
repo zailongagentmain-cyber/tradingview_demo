@@ -237,10 +237,10 @@ fig.update_layout(
 fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
 # 隐藏未使用的子图标题
-if ind1 == "无":
-    fig.updateannotations[1].text = ""
-if ind2 == "无":
-    fig.updateannotations[2].text = ""
+if len(fig.layout.annotations) > 1 and ind1 == "无":
+    fig.layout.annotations[1].text = ""
+if len(fig.layout.annotations) > 2 and ind2 == "无":
+    fig.layout.annotations[2].text = ""
 
 st.plotly_chart(fig, use_container_width=True)
 
