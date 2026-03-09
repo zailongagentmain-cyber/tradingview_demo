@@ -1,5 +1,5 @@
 """
-TradingView Demo v2.3.1 - 策略系统集成版 (修复自定义指标显示)
+TradingView Demo v2.3.3 - 策略系统集成版
 """
 import streamlit as st
 import pandas as pd
@@ -11,7 +11,7 @@ import sys
 import random
 import traceback
 
-VERSION = "v2.3.1"
+VERSION = "v2.3.3"
 
 st.set_page_config(page_title=f"TradingView {VERSION}", page_icon="📈")
 st.markdown(f"<div style='text-align:right;color:#888;font-size:12px'>📦 {VERSION}</div>", unsafe_allow_html=True)
@@ -365,7 +365,9 @@ if show_custom:
 fig.update_layout(template='plotly_dark', height=600, margin=dict(l=50, r=50, t=50, b=50),
     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     xaxis_rangeslider_visible=False)
-fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+fig.update_xaxes(matches='x', rangebreaks=[dict(bounds=["sat", "mon"])])
+fig.update_xaxes(row=2, col=1, matches='x')
+fig.update_xaxes(row=3, col=1, matches='x')
 
 st.plotly_chart(fig, use_container_width=True)
 
