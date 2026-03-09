@@ -135,12 +135,10 @@ with st.sidebar:
     
     # 均线多选
     st.subheader("📊 均线 & 趋势线 (可多选)")
-    
-    ma_cols = st.columns(3)
     ma_options = {}
-    ma_options['MA5'] = ma_cols[0].checkbox("MA5", value=True)
-    ma_options['MA10'] = ma_cols[1].checkbox("MA10", value=True)
-    ma_options['MA20'] = ma_cols[2].checkbox("MA20", value=False)
+    ma_options['MA5'] = st.checkbox("MA5", value=True)
+    ma_options['MA10'] = st.checkbox("MA10", value=True)
+    ma_options['MA20'] = st.checkbox("MA20", value=False)
     ma_options['MA30'] = st.checkbox("MA30", value=False)
     ma_options['MA60'] = st.checkbox("MA60", value=False)
     ma_options['MA120'] = st.checkbox("MA120", value=False)
