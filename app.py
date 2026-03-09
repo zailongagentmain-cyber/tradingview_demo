@@ -287,20 +287,15 @@ col2.metric("涨跌", f"{latest['close']-prev['close']:.2f}")
 col3.metric("最高", f"{latest['high']:.2f}")
 col4.metric("成交量", f"{latest['vol']:,.0f}")
 
-# 图表
-row_cnt = 2 if ind != "无" or custom_indicator_result is not None else 1
-fig = make_subplots(rows=row_cnt, cols=1, row_heights=[0.6, 0.4] if row_cnt==2 else [1.0], 
-    vertical_spacing=0.05)
+# 图表 - 固定3行结构
+row_cnt = 3
+# 子图标题
+titles = ["K线", ind if ind != "无" else "", "自定义指标" if custom_indicator_result else ""]
+fig = make_subplots(rows=3, cols=1, row_heights=[0.45, 0.275, 0.275], 
+    vertical_spacing=0.03,
+    subplot_titles=titles)
 
-# 设置子图标题
-titles = ["K线"]
-if ind != "无":
-    titles.append(ind)
-if custom_indicator_result is not None:
-    titles.append("自定义指标")
-fig.update_layout(title_text=" | ".join(titles) if len(titles) > 1 else "K线")
-
-# K线
+# K线 (第1行)
 fig.add_trace(go.Candlestick(x=df['trade_date'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
     name='K线', increasing_line_color='#26a69a', decreasing_line_color='#ef5350'), row=1, col=1)
 
@@ -330,10 +325,29 @@ if strategy_name != "无":
             showlegend=False
         ), row=1, col=1)
 
-# 副图 - 指标
-current_row = 2
+# 副图 - 内置指标 (第2行)
+if ind != "无":
+    if ind == "MACD":
+        cols = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
+        fig.add_trace(go.Bar(x=df['trade_date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+    elif ind == "KDJ":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=2, col=1)
+    elif ind == "RSI":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=2, col=1)
+    elif ind == "WR":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=2, col=1)
+    elif ind == "CCI":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
+    elif ind == "ATR":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=2, col=1)
+    elif ind == "OBV":
+        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=2, col=1)
 
-# 自定义指标 (优先显示)
+# 自定义指标 (第3行)
 if custom_indicator_result is not None:
     if isinstance(custom_indicator_result, pd.DataFrame):
         for col in custom_indicator_result.columns:
@@ -341,38 +355,13 @@ if custom_indicator_result is not None:
                 x=df['trade_date'], y=custom_indicator_result[col],
                 name=col, connectgaps=True,
                 line=dict(color=ind_color, width=1.5)
-            ), row=current_row, col=1)
+            ), row=3, col=1)
     else:
         fig.add_trace(go.Scatter(
             x=df['trade_date'], y=custom_indicator_result,
             name='自定义指标', connectgaps=True,
             line=dict(color=ind_color, width=1.5)
-        ), row=current_row, col=1)
-    current_row += 1
-    if current_row > row_cnt:
-        row_cnt = current_row
-
-# 内置副图指标
-if ind != "无" and current_row <= 2:
-    if ind == "MACD":
-        cols = ['#26a69a' if h >= 0 else '#ef5350' for h in df['macd_hist']]
-        fig.add_trace(go.Bar(x=df['trade_date'], y=df['macd_hist'], name='MACD', marker_color=cols, opacity=0.7), row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd'], name='DIF', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['macd_sig'], name='DEA', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=current_row, col=1)
-    elif ind == "KDJ":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_k'], name='K', connectgaps=True, line=dict(color='#2196f3', width=1.5)), row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_d'], name='D', connectgaps=True, line=dict(color='#ff9800', width=1.5)), row=current_row, col=1)
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['kdj_j'], name='J', connectgaps=True, line=dict(color='#e91e63', width=1.5)), row=current_row, col=1)
-    elif ind == "RSI":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['rsi'], name='RSI', connectgaps=True, line=dict(color='#9c27b0', width=1.5)), row=current_row, col=1)
-    elif ind == "WR":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['wr'], name='WR', connectgaps=True, line=dict(color='#ff5722', width=1.5)), row=current_row, col=1)
-    elif ind == "CCI":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['cci'], name='CCI', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=current_row, col=1)
-    elif ind == "ATR":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['atr'], name='ATR', connectgaps=True, line=dict(color='#795548', width=1.5)), row=current_row, col=1)
-    elif ind == "OBV":
-        fig.add_trace(go.Scatter(x=df['trade_date'], y=df['obv'], name='OBV', connectgaps=True, line=dict(color='#00bcd4', width=1.5)), row=current_row, col=1)
+        ), row=3, col=1)
 
 fig.update_layout(template='plotly_dark', height=600, margin=dict(l=50, r=50, t=50, b=50),
     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
