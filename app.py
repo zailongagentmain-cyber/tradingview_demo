@@ -75,9 +75,6 @@ def calc_rsi(close, n=14):
 
 df['rsi'] = calc_rsi(df['close'])
 
-# 填充所有NaN值，确保线条连续（用0填充开头，后续值用ffill）
-df = df.fillna(method='ffill').fillna(0)
-
 # 侧边栏
 with st.sidebar:
     st.selectbox("股票", [f"{s['ts_code']} {s['name']}" for s in DEMO_STOCKS], key="stock")
@@ -148,13 +145,13 @@ fig.add_trace(go.Candlestick(
 # 均线
 if show_ma5:
     fig.add_trace(go.Scatter(x=df['date'], y=df['ma5'], name='MA5', 
-        line=dict(color='#e91e63', width=1.5)), row=row, col=1)
+        line=dict(color='#e91e63', width=1.5), connectgaps=True), row=row, col=1)
 if show_ma10:
     fig.add_trace(go.Scatter(x=df['date'], y=df['ma10'], name='MA10', 
-        line=dict(color='#ff9800', width=1.5)), row=row, col=1)
+        line=dict(color='#ff9800', width=1.5), connectgaps=True), row=row, col=1)
 if show_ma20:
     fig.add_trace(go.Scatter(x=df['date'], y=df['ma20'], name='MA20', 
-        line=dict(color='#2196f3', width=1.5)), row=row, col=1)
+        line=dict(color='#2196f3', width=1.5), connectgaps=True), row=row, col=1)
 
 row += 1
 
@@ -171,25 +168,25 @@ if show_macd:
     fig.add_trace(go.Bar(x=df['date'], y=df['macd_hist'], name='MACD柱', 
         marker_color=colors, opacity=0.7), row=row, col=1)
     fig.add_trace(go.Scatter(x=df['date'], y=df['macd'], name='DIF', 
-        line=dict(color='#2196f3', width=1.5)), row=row, col=1)
+        line=dict(color='#2196f3', width=1.5), connectgaps=True), row=row, col=1)
     fig.add_trace(go.Scatter(x=df['date'], y=df['macd_signal'], name='DEA', 
-        line=dict(color='#ff9800', width=1.5)), row=row, col=1)
+        line=dict(color='#ff9800', width=1.5), connectgaps=True), row=row, col=1)
     row += 1
 
 # KDJ
 if show_kdj:
     fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_k'], name='K', 
-        line=dict(color='#2196f3', width=1.5)), row=row, col=1)
+        line=dict(color='#2196f3', width=1.5), connectgaps=True), row=row, col=1)
     fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_d'], name='D', 
-        line=dict(color='#ff9800', width=1.5)), row=row, col=1)
+        line=dict(color='#ff9800', width=1.5), connectgaps=True), row=row, col=1)
     fig.add_trace(go.Scatter(x=df['date'], y=df['kdj_j'], name='J', 
-        line=dict(color='#e91e63', width=1.5)), row=row, col=1)
+        line=dict(color='#e91e63', width=1.5), connectgaps=True), row=row, col=1)
     row += 1
 
 # RSI
 if show_rsi:
     fig.add_trace(go.Scatter(x=df['date'], y=df['rsi'], name='RSI', 
-        line=dict(color='#9c27b0', width=1.5)), row=row, col=1)
+        line=dict(color='#9c27b0', width=1.5), connectgaps=True), row=row, col=1)
     # RSI参考线 - 使用add_shape
     fig.add_shape(type="line", x0=df['date'].iloc[0], x1=df['date'].iloc[-1], y0=70, y1=70,
                   line=dict(color="gray", width=1, dash="solid"), row=row, col=1)
