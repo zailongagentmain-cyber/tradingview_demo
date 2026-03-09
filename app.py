@@ -11,10 +11,18 @@ import sys
 
 # 页面配置
 st.set_page_config(
-    page_title="TradingView Demo",
+    page_title="TradingView Demo v1.0",
     page_icon="📈",
     layout="wide"
 )
+
+# 版本信息
+VERSION = "v1.0.0"
+st.markdown(f"""
+<div style="text-align: right; color: #666; font-size: 12px; margin-bottom: 10px;">
+    📦 {VERSION} | <a href="https://github.com/zailongagentmain-cyber/tradingview_demo" target="_blank" style="color: #666;">GitHub</a>
+</div>
+""", unsafe_allow_html=True)
 
 st.title("📈 股票 K 线图展示")
 
