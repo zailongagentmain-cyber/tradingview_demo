@@ -1,5 +1,5 @@
 """
-TradingView Demo v2.2.1 - 策略系统集成版 (支持模拟数据)
+TradingView Demo v2.2.1 - 策略系统集成版 (带演示数据)
 """
 import streamlit as st
 import pandas as pd
@@ -20,35 +20,25 @@ st.title("📈 股票分析系统")
 DB_PATH = os.path.expanduser("~/projects/tradingview-demo/data/tradingview.db")
 
 def get_stocks(limit=200):
-    """从数据库获取股票列表，如果失败返回默认列表"""
     try:
-        if not os.path.exists(DB_PATH):
-            return None
         conn = sqlite3.connect(DB_PATH)
         df = pd.read_sql(f"SELECT ts_code, name FROM stocks LIMIT {limit}", conn)
         conn.close()
-        return df if not df.empty else None
+        return df
     except Exception as e:
-        print(f"DB Error: {e}")
         return None
 
 def get_klines(ts_code, limit=500):
-    """从数据库获取K线，如果失败生成模拟数据"""
     try:
-        if not os.path.exists(DB_PATH):
-            return generate_demo_data(limit)
         conn = sqlite3.connect(DB_PATH)
         df = pd.read_sql(f"SELECT trade_date, open, high, low, close, vol FROM daily_klines WHERE ts_code = '{ts_code}' ORDER BY trade_date ASC LIMIT {limit}", conn)
         conn.close()
-        if df.empty:
-            return generate_demo_data(limit)
         return df
     except Exception as e:
-        print(f"DB Error: {e}")
-        return generate_demo_data(limit)
+        return None
 
 def generate_demo_data(days=200):
-    """生成模拟K线数据"""
+    """生成演示数据"""
     random.seed(42)
     data = []
     price = 12.0
@@ -63,31 +53,30 @@ def generate_demo_data(days=200):
         price = c
     return pd.DataFrame(data)
 
-# 获取股票列表
+# 尝试获取数据
 stocks_df = get_stocks(200)
-if stocks_df is not None:
-    stock_opts = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for _, s in stocks_df.iterrows()}
-    DB_AVAILABLE = True
-else:
-    stock_opts = {
-        "000001.SZ - 平安银行": "000001.SZ",
-        "600519.SH - 贵州茅台": "600519.SH",
-        "600000.SH - 浦发银行": "600000.SH",
-        "600036.SH - 招商银行": "600036.SH",
-        "000002.SZ - 万科A": "000002.SZ",
-    }
-    DB_AVAILABLE = False
+DB_AVAILABLE = stocks_df is not None and not stocks_df.empty
 
 # 侧边栏
 with st.sidebar:
     st.header("📊 股票选择")
+    
     if DB_AVAILABLE:
-        st.caption("✅ 数据库已连接")
+        stock_opts = {f"{s['ts_code']} - {s['name']}": s['ts_code'] for _, s in stocks_df.iterrows()}
     else:
-        st.caption("⚠️ 使用模拟数据")
+        # 演示用股票列表
+        stock_opts = {
+            "000001.SZ - 平安银行": "000001.SZ",
+            "600519.SH - 贵州茅台": "600519.SH",
+            "600000.SH - 浦发银行": "600000.SH",
+            "600036.SH - 招商银行": "600036.SH",
+            "000002.SZ - 万科A": "000002.SZ",
+        }
     
     sel = st.selectbox("股票", list(stock_opts.keys()), key="stock")
     ts_code = stock_opts.get(sel, "000001.SZ")
+    
+    st.caption(f"数据源: {'📡 真实数据库' if DB_AVAILABLE else '🎭 演示数据'}")
     
     st.divider()
     
@@ -107,11 +96,7 @@ with st.sidebar:
     
     # 策略系统
     st.subheader("🎯 策略系统")
-    strategy_name = st.selectbox(
-        "选择策略",
-        ["无", "MA_CROSS", "RSI", "MACD", "DUAL_MA_RSI"],
-        key="strategy_select"
-    )
+    strategy_name = st.selectbox("选择策略", ["无", "MA_CROSS", "RSI", "MACD", "DUAL_MA_RSI"], key="strategy_select")
     
     if strategy_name == "MA_CROSS":
         st.caption("参数设置")
@@ -132,6 +117,9 @@ with st.sidebar:
 
 # 获取数据
 df = get_klines(ts_code, 500)
+if df is None or df.empty:
+    st.warning("数据库连接失败，使用演示数据")
+    df = generate_demo_data(200)
 
 if df.empty:
     st.warning("无数据")
@@ -287,10 +275,7 @@ fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 底部信息
 info = f"📊 {ts_code} | {len(df)}条"
-if not DB_AVAILABLE:
-    info += " | ⚠️ 模拟数据"
 if strategy_name != "无":
     info += f" | 策略: {strategy_name}"
 st.caption(info)
